@@ -18,7 +18,7 @@ internal class Slot
         AvailableUsers = [];
 
         var amsterdamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
-        DateTimeOffset = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(timestamp), amsterdamTimeZone); ;
+        DateTimeOffset = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(timestamp), amsterdamTimeZone);
 
         DayOfWeek = (int)DateTimeOffset.DayOfWeek;
     }
@@ -27,6 +27,20 @@ internal class Slot
     {
         return $"Slot(idx={Idx}, time={DateTimeOffset}, available_users={string.Join(", ", AvailableUsers)})";
     }
+}
+
+internal class TimeWindow
+{
+    public DateTimeOffset Start { get; }
+    public DateTimeOffset End { get; }
+
+    public TimeWindow(DateTimeOffset start, DateTimeOffset end)
+    {
+        Start = start;
+        End = end;
+    }
+
+    public override string ToString() => $"{Start:yyyy-MM-dd HH:mm} → {End:HH:mm}";
 }
 
 internal class Program
@@ -55,9 +69,11 @@ internal class Program
             {
                 slots.Add(new Slot(idx, time));
             }
+
             idx++;
             identifier = $"TimeOfSlot[{idx}]=";
         }
+
         return slots;
     }
 
@@ -91,30 +107,20 @@ internal class Program
                 slot.AvailableUsers = userIds.Where(people.ContainsKey).Select(id => people[id]).ToList();
             }
         }
+
         return timeslots;
     }
 
     private static void WriteCsv(List<Slot> slots, string outputFile)
     {
         // 1) Determine unique users (sorted alphabetically)
-        var uniqueUsers = slots
-            .SelectMany(s => s.AvailableUsers)
-            .Distinct()
-            .OrderBy(u => u)
-            .ToList();
+        var uniqueUsers = slots.SelectMany(s => s.AvailableUsers).Distinct().OrderBy(u => u).ToList();
 
         // 2) Build a parallel list of ISO8601 timestamps (with offset)
-        var timeSlots = slots
-            .Select(s => s.DateTimeOffset.ToString("yyyy-MM-ddTHH:mm:sszzz"))
-            .ToList();
+        var timeSlots = slots.Select(s => s.DateTimeOffset.ToString("yyyy-MM-ddTHH:mm:sszzz")).ToList();
 
         // 3) Precompute availability matrix: user → list of "true"/"false"
-        var userAvailability = uniqueUsers.ToDictionary(
-            user => user,
-            user => slots
-                .Select(s => s.AvailableUsers.Contains(user) ? "true" : "false")
-                .ToList()
-        );
+        var userAvailability = uniqueUsers.ToDictionary(user => user, user => slots.Select(s => s.AvailableUsers.Contains(user) ? "true" : "false").ToList());
 
         // 4) CSV‐field escaper (quotes fields containing comma, quote, or newline)
         static string EscapeCsv(string field)
@@ -123,6 +129,7 @@ internal class Program
             {
                 return "\"" + field.Replace("\"", "\"\"") + "\"";
             }
+
             return field;
         }
 
@@ -142,14 +149,105 @@ internal class Program
             {
                 fields.Add(userAvailability[user][row]);
             }
+
             writer.WriteLine(string.Join(",", fields.Select(EscapeCsv)));
         }
     }
 
 
+    /// <summary>
+    /// Finds, for each calendar day, all time‐ranges where at least `minUsers` are
+    /// continuously available for at least `minConsecutiveSlots` slots (15 min each).
+    /// </summary>
+    private static Dictionary<DateTime, List<TimeWindow>> FindAvailablePeriods(List<Slot> slots, int minConsecutiveSlots = 6, int minUsers = 3)
+    {
+        var result = new Dictionary<DateTime, List<TimeWindow>>();
+
+        // 1) All distinct users
+        var users = slots.SelectMany(s => s.AvailableUsers).Distinct().ToList();
+
+        // 2) All dates present
+        var dates = slots.Select(s => s.DateTimeOffset.Date).Distinct().OrderBy(d => d);
+
+        foreach (var date in dates)
+        {
+            // 3) Slots for this date, in timestamp order
+            var daySlots = slots.Where(s => s.DateTimeOffset.Date == date).OrderBy(s => s.Timestamp).ToList();
+            int m = daySlots.Count;
+            if (m == 0) continue;
+
+            // 4) Build per‐user availability arrays
+            var availability = users.ToDictionary(user => user, user => daySlots.Select(s => s.AvailableUsers.Contains(user)).ToArray());
+
+            // 5) For each user, mark only those slots that lie inside a run ≥ minConsecutiveSlots
+            var longAvailability = availability.ToDictionary(kvp => kvp.Key, kvp => ComputeLongAvailability(kvp.Value, minConsecutiveSlots));
+
+            // 6) Count how many users are “long‐available” at each slot
+            var counts = new int[m];
+            for (int i = 0; i < m; i++)
+                counts[i] = longAvailability.Values.Count(arr => arr[i]);
+
+            // 7) Sweep for contiguous runs where counts[i] >= minUsers
+            var windows = new List<TimeWindow>();
+            for (int i = 0; i < m;)
+            {
+                if (counts[i] >= minUsers)
+                {
+                    int startIdx = i;
+                    while (i < m && counts[i] >= minUsers) i++;
+                    int endIdx = i - 1;
+
+                    var start = daySlots[startIdx].DateTimeOffset;
+                    // end = end of last slot → add 15 minutes
+                    var end = daySlots[endIdx].DateTimeOffset.AddMinutes(15);
+
+                    windows.Add(new TimeWindow(start, end));
+                }
+                else
+                {
+                    i++;
+                }
+            }
+
+            if (windows.Count > 0)
+                result[date] = windows;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Given a raw availability array (true/false per slot), returns a new array
+    /// where only positions inside a run of length >= minConsecutiveSlots are true.
+    /// </summary>
+    private static bool[] ComputeLongAvailability(bool[] raw, int minConsecutiveSlots)
+    {
+        int n = raw.Length;
+        var outArr = new bool[n];
+        int runLen = 0;
+
+        for (int i = 0; i < n; i++)
+        {
+            if (raw[i])
+                runLen++;
+            else
+                runLen = 0;
+
+            if (runLen >= minConsecutiveSlots)
+            {
+                // mark the last runLen slots as true
+                for (int j = i; j > i - runLen; j--)
+                    outArr[j] = true;
+            }
+        }
+
+        return outArr;
+    }
+
+
     private static async Task Main()
     {
-        var inputData = await File.ReadAllTextAsync("test_response");
+        var inputData = await File.ReadAllTextAsync("hippo");
         var timeslots = OneRetrieveTimeslots(inputData);
         var mappedTimeslots = TwoParseAvailability(inputData, timeslots);
         mappedTimeslots.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
@@ -159,9 +257,16 @@ internal class Program
         var firstHour = firstDaySlots.First().DateTimeOffset.Hour;
         var lastHour = firstDaySlots.Last().DateTimeOffset.Hour;
 
-        const string outputFile = "availability_schedule.csv";
+        const string outputFile = "hippo1.csv";
         WriteCsv(mappedTimeslots, outputFile);
-
         Console.WriteLine($"CSV export completed: {outputFile}");
+
+        var windows = FindAvailablePeriods(mappedTimeslots);
+        foreach (var kvp in windows)
+        {
+            Console.WriteLine(kvp.Key.ToString("yyyy-MM-dd"));
+            foreach (var w in kvp.Value)
+                Console.WriteLine($"  {w}");
+        }
     }
 }
