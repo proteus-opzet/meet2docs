@@ -69,11 +69,35 @@ public class CsvToXlsxConverter
             }
             else if (allDateTime)
             {
-                foreach (var cell in dataRange.Cells())
-                    cell.Value = DateTime.Parse(cell.Value.ToString());
+                bool allTimeOnly = true;
 
-                // Format cells as date
-                dataRange.Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+                foreach (var cell in dataRange.Cells())
+                {
+                    var value = cell.Value.ToString();
+                    if (DateTime.TryParseExact(value, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+                    {
+                        cell.Value = time;
+                    }
+                    else if (DateTime.TryParse(value, out var dateTime))
+                    {
+                        cell.Value = dateTime;
+                        if (dateTime.TimeOfDay == TimeSpan.Zero)
+                            allTimeOnly = false;
+                    }
+                    else
+                    {
+                        allTimeOnly = false;
+                    }
+                }
+
+                if (allTimeOnly)
+                {
+                    dataRange.Style.DateFormat.Format = "HH:mm";
+                }
+                else
+                {
+                    dataRange.Style.DateFormat.Format = "yyyy-mm-dd hh:mm";
+                }
 
                 dataRange.AddConditionalFormat()
                     .ColorScale()
