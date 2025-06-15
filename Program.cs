@@ -1,4 +1,5 @@
 ﻿using System.Text.RegularExpressions;
+using File = System.IO.File;
 
 namespace Meet2Docs;
 
@@ -6,12 +7,15 @@ public class Program
 {
     // --- BEGIN Section: change these parameters ---
     private const string When2MeetUrl = "https://www.when2meet.com/ChangeMe";
-
-    private static readonly DateTimeOffset StartOfWeek = DateTimeOffset.Parse("2025-06-02T00:00:00+02");
-    private static readonly DateTimeOffset EndOfWeek = DateTimeOffset.Parse("2025-06-09T00:00:00+02");
+    
+    private static readonly DateTimeOffset StartOfWeek = DateTimeOffset.Parse("2025-06-23T00:00:00+02");
+    private static readonly DateTimeOffset EndOfWeek = DateTimeOffset.Parse("2025-06-30T00:00:00+02");
 
     private static readonly TimeSpan BeginningOfDay = new(6, 0, 0);
     private static readonly TimeSpan EndOfDay = new(22, 0, 0);
+
+    // Names must match exactly! Case-sensitive
+    private static readonly List<string> SelectOnlyThese = []; // Specify names to filter by, or leave empty to include all
     // --- END Section ---
 
     public static readonly TimeZoneInfo Timezone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
@@ -89,12 +93,18 @@ public class Program
     {
         Dictionary<int, string> people = new();
         Dictionary<int, List<int>> availability = new();
-
+        List<int> ignoreIDs = [];
         GeneratedRegexAttribute genRegex = new(@"PeopleNames\[(\d+)] = '([^']+)';PeopleIDs\[\1] = (\d+);");
         foreach (Match match in Regex.Matches(inputStr, genRegex.Pattern))
         {
             var userId = int.Parse(match.Groups[3].Value);
             var name = match.Groups[2].Value.Trim();
+            if (SelectOnlyThese.Count > 0 && !SelectOnlyThese.Contains(name))
+            {
+                ignoreIDs.Add(userId); // Collect IDs to ignore
+                continue; // Skip this user if not in the selection list
+            }
+
             people[userId] = name;
         }
 
@@ -105,6 +115,7 @@ public class Program
             var userId = int.Parse(match.Groups[2].Value);
             if (!availability.ContainsKey(slotIdx))
                 availability[slotIdx] = [];
+            if (ignoreIDs.Contains(userId)) continue; // Skip this user if their ID is in the ignore list
             availability[slotIdx].Add(userId);
         }
 
