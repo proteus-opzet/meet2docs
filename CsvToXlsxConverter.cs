@@ -10,8 +10,6 @@ public class CsvToXlsxConverter
     {
         var dataTable = ReadCsvToDataTable(csvPath);
         CreateXlsxWithConditionalFormatting(dataTable, xlsxPath);
-        
-        Console.WriteLine("Conversion complete.");
     }
 
     // Step 1: Read CSV to DataTable

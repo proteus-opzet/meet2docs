@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Meet2Docs": {
+      "commandName": "Project",
+      "commandLineArgs": "--urls=https://www.when2meet.com/ChangeMe1,https://www.when2meet.com/ChangeMe2 --select-only=\"Maria Tester\",\"Example de Jong\""
+    }
+  }
+}

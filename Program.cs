@@ -1,19 +1,12 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.CommandLine;
+using System.Text.RegularExpressions;
 using File = System.IO.File;
+using System.CommandLine.Parsing;
 
 namespace Meet2Docs;
 
 public class Program
 {
-    // --- BEGIN Section: change these parameters ---
-    private static string[] When2MeetUrls = ["https://www.when2meet.com/A", "https://www.when2meet.com/B"];
-
-    // Show only some users (exact matching, case-sensitive)
-    // Default: no filtering (leave empty)
-    private static readonly List<string> SelectOnlyThese = []; 
-
-    // --- END Section ---
-
     private const int NDaysAfterWhichTheNextMondayIsSelected = 4;
     private static DateTimeOffset StartOfWeek
     {
@@ -36,44 +29,108 @@ public class Program
     public static readonly TimeZoneInfo Timezone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
 
 
+    public static async Task<int> Main(string[] args)
+    {
+        var urlsOption = new Option<string[]>(
+            name: "--urls",
+            "-u"
+        )
+        {
+            Description = "A comma-separated list of URLs",
+            Arity = ArgumentArity.ExactlyOne,
+            Required = true,
+            CustomParser = result =>
+            {
+                var token = result.Tokens.Count > 0 ? result.Tokens[0].Value : "";
+                return token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+        };
+
+        var selectOnlyOption = new Option<string[]>(
+            "--select-only",
+            "-s"
+        )
+        {
+            Description = "A comma-separated list of names to select",
+            Arity = ArgumentArity.ZeroOrOne,
+            CustomParser = result =>
+            {
+                var token = result.Tokens.Count > 0 ? result.Tokens[0].Value : "";
+                return token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            }
+        };
+
+        var rootCommand = new RootCommand("Extracts information about a When2Meet event");
+        rootCommand.Options.Add(urlsOption);
+        rootCommand.Options.Add(selectOnlyOption);
+        var parseResult = rootCommand.Parse(args);
+
+        rootCommand.SetAction(res =>
+        {
+            if (res.GetRequiredValue(urlsOption) is { } parsedUrls
+                && res.GetValue(selectOnlyOption) is { } parsedNamesToSelectOnly)
+            {
+                return Run(parsedUrls, parsedNamesToSelectOnly).Result;
+            }
+            return 0;
+        });
+
+        var statusCode = await parseResult.InvokeAsync();
+        Console.WriteLine("Press any key to continue...");
+        Console.ReadKey();
+        return statusCode;
+    }
+
+
     /// <summary>
     /// Main program logic
     /// </summary>
-    public static async Task Main()
+    internal static async Task<int> Run(string[] urls, string[] selectOnly)
     {
-        //1. Using data from the first URL, retrieve timeslot times
-        var firstUrl = When2MeetUrls.FirstOrDefault();
-        var inputHtmls = new string[When2MeetUrls.Length];
-
-        var requestTimestamp = DateTime.Now;
-        using var client = new HttpClient();
-        inputHtmls[0] = await client.GetStringAsync(firstUrl);
-        var timeslots = RetrieveTimeslots(inputHtmls[0]);
-        
-        //2. Add availability from all URLs
-        for (var i = 0; i < When2MeetUrls.Length; i++)
+        try
         {
-            var url = When2MeetUrls[i];
-            inputHtmls[i] = await client.GetStringAsync(url);
-            timeslots = AddAvailabilityToTimeslots(inputHtmls[i], timeslots);
+            //1. Using data from the first URL, retrieve timeslot times
+            var firstUrl = urls.FirstOrDefault();
+            var inputHtmls = new string[urls.Length];
+
+            var requestTimestamp = DateTime.Now;
+            using var client = new HttpClient();
+            inputHtmls[0] = await client.GetStringAsync(firstUrl);
+            var timeslots = RetrieveTimeslots(inputHtmls[0]);
+
+            //2. Add availability from all URLs
+            for (var i = 0; i < urls.Length; i++)
+            {
+                var url = urls[i];
+                inputHtmls[i] = await client.GetStringAsync(url);
+                timeslots = AddAvailabilityToTimeslots(inputHtmls[i], timeslots, selectOnly);
+            }
+
+            // 3. Summarize user availability
+            timeslots = MarkBlockMembership(timeslots);
+
+            // 4. Write output CSV, XLSX
+            var eventNames = new string[urls.Length];
+            for (var i = 0; i < urls.Length; i++)
+            {
+                eventNames[i] = string.Join("_", FindEventName(inputHtmls[i]).Split(Path.GetInvalidFileNameChars())).Replace(" ", "_");
+            }
+
+            var filenameBase = $"{string.Join("_", eventNames)}_{requestTimestamp:yyyyMMdd_HHmmss}";
+            var lines = CreateCsv(timeslots);
+
+            await File.WriteAllLinesAsync(filenameBase + ".csv", lines);
+            Console.WriteLine($"CSV export completed: {filenameBase}.csv");
+            CsvToXlsxConverter.Run(filenameBase + ".csv", filenameBase + ".xlsx");
+            Console.WriteLine($"Formatted XLSX exported: {filenameBase}.xlsx");
+
+            return 0;
         }
-
-        // 3. Summarize user availability
-        timeslots = MarkBlockMembership(timeslots);
-
-        // 4. Write output CSV, XLSX
-        var eventNames = new string[When2MeetUrls.Length];
-        for (var i = 0; i < When2MeetUrls.Length; i++)
+        catch (Exception ex)
         {
-            eventNames[i] = string.Join("_", FindEventName(inputHtmls[i]).Split(Path.GetInvalidFileNameChars())).Replace(" ", "_");
+            await Console.Error.WriteLineAsync(ex.Message);
+            return 1;
         }
-
-        var filenameBase = $"{string.Join("_", eventNames)}_{requestTimestamp:yyyyMMdd_HHmmss}";
-        var lines = CreateCsv(timeslots);
-
-        await File.WriteAllLinesAsync(filenameBase + ".csv", lines);
-        Console.WriteLine($"CSV export completed: {filenameBase}.csv");
-        CsvToXlsxConverter.Run(filenameBase + ".csv", filenameBase + ".xlsx");
     }
 
     /// <summary>
@@ -119,7 +176,7 @@ public class Program
     /// <summary>
     /// Adds the list of available people for each timeslot.
     /// </summary>
-    private static List<Timeslot> AddAvailabilityToTimeslots(string inputStr, List<Timeslot> timeslots)
+    private static List<Timeslot> AddAvailabilityToTimeslots(string inputStr, List<Timeslot> timeslots, string[] selectOnly)
     {
         Dictionary<int, string> people = new();
         Dictionary<int, List<int>> availability = new();
@@ -129,7 +186,7 @@ public class Program
         {
             var userId = int.Parse(match.Groups[3].Value);
             var name = match.Groups[2].Value.Trim();
-            if (SelectOnlyThese.Count > 0 && !SelectOnlyThese.Contains(name))
+            if (selectOnly.Length > 0 && !selectOnly.Contains(name))
             {
                 ignoreIDs.Add(userId); // Collect IDs to ignore
                 continue; // Skip this user if not in the selection list
