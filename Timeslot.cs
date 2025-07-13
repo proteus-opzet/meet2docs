@@ -6,7 +6,7 @@ internal class Timeslot
     public long BeginTimestamp { get; }
     public List<string> AvailableUsers { get; set; } = [];
 
-    public DateTimeOffset DateTimeBegin => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(BeginTimestamp), Program.Timezone);
+    public DateTimeOffset DateTimeBegin => TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(BeginTimestamp), Parser.Timezone);
     public int DayOfTheWeek => (int)DateTimeBegin.DayOfWeek;
     public string DateString => DateTimeBegin.ToString("yyyy-MM-dd");
 

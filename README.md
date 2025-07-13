@@ -1,43 +1,34 @@
 # Meet2Docs
 
-**Meet2Docs** is a cross-platform .NET 9 script for turning When2Meet data into a more useful representation: an Excel document with conditional formatting.
+Extract user availability from When2Meet data.
 
-## 🚀 Quick Start
+## Quick Start
 
-1. Clone the repository:
+* Linux
+	```bash
+	./meet2docs --urls=https://when2meet.com/ChangeMe1,https://when2meet.com/ChangeMe2 --select-only="Name Surname 1","Name Surname 2"
+	```
+* Windows
+	```bat
+	./meet2docs.exe --urls=https://when2meet.com/ChangeMe1,https://when2meet.com/ChangeMe2 --select-only="Name Surname 1","Name Surname 2"
+	```
+
+* You can also build it from source:
+
+1. Clone the repo and enter it:
 
    ```bash
-   git clone <repo-url>
-   ```
-
-2. Navigate to the project directory:
-
-   ```bash
+   git clone https://github.com/proteus-opzet/meet2docs.git
    cd ./meet2docs
    ```
 
-3. Modify parameters at the top of:
-
-   ```
-   ./meet2docs/Program.cs
-   ```
-
-4. Run the project:
+2. Run the project. Example:
 
    ```bash
-   dotnet run
+   dotnet run -- --urls=https://when2meet.com/ChangeMe1,https://when2meet.com/ChangeMe2 --select-only="Name Surname 1","Name Surname 2"
    ```
 
-## ⚙️ Requirements
+##  Development, debugging
 
-* [.NET 9 SDK](https://dotnet.microsoft.com/)
-
-## 🧰 Debugging
-
-* Best debugging experience with:
-
-  * **Visual Studio 2022**
-  * **JetBrains Rider**
-    
-* Debugging also possible with:
-  * **VSCode or VSCodium (open-source)**
+* Building requires [.NET 9 SDK](https://dotnet.microsoft.com/)
+* You can use for example Visual Studio, VSCode or VSCodium
