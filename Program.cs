@@ -6,17 +6,18 @@ namespace Meet2Docs;
 public class Program
 {
     // --- BEGIN Section: change these parameters ---
-    private const string When2MeetUrl = "https://www.when2meet.com/ChangeMe";
-    
-    private static readonly DateTimeOffset StartOfWeek = DateTimeOffset.Parse("2025-06-23T00:00:00+02");
-    private static readonly DateTimeOffset EndOfWeek = DateTimeOffset.Parse("2025-06-30T00:00:00+02");
+    private static string[] When2MeetUrls = ["https://www.when2meet.com/A", "https://www.when2meet.com/B"];
 
-    private static readonly TimeSpan BeginningOfDay = new(6, 0, 0);
-    private static readonly TimeSpan EndOfDay = new(22, 0, 0);
+    private static readonly DateTimeOffset StartOfWeek = DateTimeOffset.Parse("2025-07-20T00:00:00+02");
+    private static readonly DateTimeOffset EndOfWeek = DateTimeOffset.Parse("2025-07-27T00:00:00+02");
+
 
     // Names must match exactly! Case-sensitive
     private static readonly List<string> SelectOnlyThese = []; // Specify names to filter by, or leave empty to include all
     // --- END Section ---
+
+    private static readonly TimeSpan BeginningOfDay = new(6, 0, 0);
+    private static readonly TimeSpan EndOfDay = new(22, 0, 0);
 
     public static readonly TimeZoneInfo Timezone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
 
@@ -26,19 +27,34 @@ public class Program
     /// </summary>
     public static async Task Main()
     {
-        // 1. Request the When2Meet webpage
-        using var client = new HttpClient();
-        var inputHtml = await client.GetStringAsync(When2MeetUrl);
-        var requestTimestamp = DateTime.Now;
+        //1. Using data from the first URL, retrieve timeslot times
+        var firstUrl = When2MeetUrls.FirstOrDefault();
+        var inputHtmls = new string[When2MeetUrls.Length];
 
-        // 2. Process availability
-        var timeslots = RetrieveTimeslots(inputHtml);
-        timeslots = AddAvailabilityToTimeslots(inputHtml, timeslots);
+        var requestTimestamp = DateTime.Now;
+        using var client = new HttpClient();
+        inputHtmls[0] = await client.GetStringAsync(firstUrl);
+        var timeslots = RetrieveTimeslots(inputHtmls[0]);
+        timeslots = AddAvailabilityToTimeslots(inputHtmls[0], timeslots);
+
+
+        for (var i = 1; i < When2MeetUrls.Length; i++)
+        {
+            var url = When2MeetUrls[i];
+            inputHtmls[i] = await client.GetStringAsync(url);
+            timeslots = AddAvailabilityToTimeslots(inputHtmls[i], timeslots);
+        }
+
         timeslots = MarkBlockMembership(timeslots);
 
+        var eventNames = new string[When2MeetUrls.Length];
+        for (var i = 0; i < When2MeetUrls.Length; i++)
+        {
+            eventNames[i] = string.Join("_", FindEventName(inputHtmls[i]).Split(Path.GetInvalidFileNameChars())).Replace(" ", "_");
+        }
+
         // 3. Write output CSV
-        var eventName = string.Join("_", FindEventName(inputHtml).Split(Path.GetInvalidFileNameChars())).Replace(" ", "_");
-        var filenameBase = $"{eventName}_{requestTimestamp:yyyyMMdd_HHmmss}";
+        var filenameBase = $"{string.Join("_", eventNames)}_{requestTimestamp:yyyyMMdd_HHmmss}";
         var lines = CreateCsv(timeslots);
 
         await File.WriteAllLinesAsync(filenameBase + ".csv", lines);
@@ -123,7 +139,8 @@ public class Program
         {
             if (availability.TryGetValue(slot.Index, out var userIds))
             {
-                slot.AvailableUsers = userIds.Where(people.ContainsKey).Select(id => people[id]).ToList();
+                slot.AvailableUsers ??= [];
+                slot.AvailableUsers.AddRange(userIds.Where(people.ContainsKey).Select(id => people[id]).ToList());
             }
         }
 
