@@ -198,7 +198,7 @@ public class Program
 
     private static List<string> CreateCsv(List<Timeslot> timeslots)
     {
-        var allNames = timeslots.SelectMany(ts => ts.AvailableUsers).Distinct().OrderBy(n => n).ToList();
+        var allNames = timeslots.SelectMany(ts => ts.AvailableUsers).Distinct().OrderBy(n => TotalIndividualAvailability(timeslots, n)).ToList();
         var header = new List<string>();
         header.AddRange(["DayOfTheWeek", "DateString", "BeginTimeString"]);
         header.AddRange(allNames);
@@ -229,6 +229,11 @@ public class Program
         }
 
         return lines;
+    }
+
+    private static int TotalIndividualAvailability(List<Timeslot> timeslots, string s)
+    {
+        return timeslots.Count(timeslot => timeslot.AvailableUsers.Contains(s));
     }
 
     private static string EscapeCsv(string field)
