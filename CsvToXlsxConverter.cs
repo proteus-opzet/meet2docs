@@ -67,7 +67,7 @@ public class CsvToXlsxConverter
             }
             else if (allDateTime)
             {
-                bool allTimeOnly = true;
+                var allTimeOnly = true;
 
                 foreach (var cell in dataRange.Cells())
                 {
