@@ -4,11 +4,8 @@ namespace Meet2Docs;
 
 internal class CsvTransposeUtil
 {
-    internal static void Run()
+    internal static void Run(string inputPath, string outputPath)
     {
-        const string inputPath = "Final_Capybara_Final_Seahorse_20250811_122452.csv";
-        const string outputPath = "merged-experimental.csv";
-
         // Read all lines from CSV
         var lines = File.ReadAllLines(inputPath);
         if (lines.Length < 2)
@@ -78,37 +75,17 @@ internal class CsvTransposeUtil
         foreach (var group in groupedByDate)
         {
             var sortedGroup = group.OrderBy(r => r.BeginTime).ToList();
-            var times = sortedGroup.Select(r => r.BeginTime).ToList();
 
-            var combinedRanges = CombineSlots(sortedGroup);
-            foreach (var range in combinedRanges)
+            var combinedRanges = CombineSlots(sortedGroup, userCols);
+            foreach (var (start, end, availableUsers) in combinedRanges)
             {
-                string dayName = range.Start.ToString("ddd", CultureInfo.InvariantCulture);
-                string rangeStr = $"{dayName} {range.Start:HH:mm}-{range.End.AddMinutes(15):HH:mm}";
+                string dayName = start.ToString("ddd", CultureInfo.InvariantCulture);
+                string rangeStr = $"{dayName} {start:HH:mm}-{end.AddMinutes(15):HH:mm}";
                 timeRanges.Add(rangeStr);
 
-                var blockRows = sortedGroup.Where(r => r.BeginTime >= range.Start && r.BeginTime <= range.End).ToList();
-
-                // Compute users for this block
-                var userCounts = new Dictionary<string, int>();
-                foreach (var row in blockRows)
-                {
-                    foreach (var user in userCols)
-                    {
-                        if (row.UserAvailability.ContainsKey(user))
-                        {
-                            userCounts[user] = userCounts.GetValueOrDefault(user, 0) + row.UserAvailability[user];
-                        }
-                    }
-                }
-
-                var allUsers = userCounts
-                    .Where(kvp => kvp.Value > 0)
-                    .OrderByDescending(kvp => kvp.Value)
-                    .Select(kvp => kvp.Key)
-                    .ToList();
-
-                slotsUsers.Add(allUsers);
+                // Create a list of users sorted (e.g., alphabetically or however you want)
+                var sortedUsers = availableUsers.OrderBy(u => u).ToList();
+                slotsUsers.Add(sortedUsers);
             }
 
         }
@@ -132,49 +109,47 @@ internal class CsvTransposeUtil
         Console.WriteLine($"Training schedule written to {outputPath}");
     }
 
-    static List<(DateTime Start, DateTime End, int CountAvailable)> CombineSlots(List<AvailabilityRow> sortedRows)
+    static List<(DateTime Start, DateTime End, HashSet<string> AvailableUsers)> CombineSlots(List<AvailabilityRow> sortedRows, List<string> userCols)
     {
-        var ranges = new List<(DateTime Start, DateTime End, int CountAvailable)>();
+        var ranges = new List<(DateTime Start, DateTime End, HashSet<string> AvailableUsers)>();
         if (sortedRows.Count == 0) return ranges;
 
-        DateTime rangeStart = sortedRows[0].BeginTime;
-        DateTime prevTime = rangeStart;
-        int currentCount = sortedRows[0].UserAvailability.Values.Sum(); // Will replace later with actual CountAvailable field
-        currentCount = GetCountAvailable(sortedRows[0]);
+        var rangeStart = sortedRows[0].BeginTime;
+        var prevTime = rangeStart;
+        var currentUsers = GetAvailableUsers(sortedRows[0], userCols);
 
-        for (int i = 1; i < sortedRows.Count; i++)
+        for (var i = 1; i < sortedRows.Count; i++)
         {
             var row = sortedRows[i];
-            int rowCount = GetCountAvailable(row);
+            var rowUsers = GetAvailableUsers(row, userCols);
 
-            // If consecutive time AND same count, extend range
-            if ((row.BeginTime - prevTime).TotalMinutes == 15 && rowCount == currentCount)
+            // Check: 15-minute gap and same user set
+            if (Math.Abs((row.BeginTime - prevTime).TotalMinutes - 15) < double.Epsilon && currentUsers.SetEquals(rowUsers))
             {
                 prevTime = row.BeginTime;
             }
             else
             {
-                // Close the current range
-                ranges.Add((rangeStart, prevTime, currentCount));
+                // Close current range
+                ranges.Add((rangeStart, prevTime, currentUsers));
 
                 // Start new range
                 rangeStart = row.BeginTime;
                 prevTime = row.BeginTime;
-                currentCount = rowCount;
+                currentUsers = rowUsers;
             }
         }
 
         // Add final range
-        ranges.Add((rangeStart, prevTime, currentCount));
+        ranges.Add((rangeStart, prevTime, currentUsers));
         return ranges;
     }
 
-    static int GetCountAvailable(AvailabilityRow row)
+    private static HashSet<string> GetAvailableUsers(AvailabilityRow row, List<string> userCols)
     {
-        // Prefer using actual "CountAvailable" if present
-        // If not, compute as sum of users marked as available (1)
-        return row.UserAvailability.Values.Sum();
+        return userCols.Where(user => row.UserAvailability.ContainsKey(user) && row.UserAvailability[user] > 0).ToHashSet();
     }
+
 }
 
 internal class AvailabilityRow

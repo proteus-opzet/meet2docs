@@ -64,10 +64,13 @@ internal class Parser
             var lines = CreateCsv(timeslots);
 
             await File.WriteAllLinesAsync(filenameBase + ".csv", lines);
-            Console.WriteLine($"CSV export completed: {filenameBase}.csv");
+            Console.WriteLine($"Basic CSV exported: {filenameBase}.csv");
             CsvToXlsxConverter.Run(filenameBase + ".csv", filenameBase + ".xlsx");
             Console.WriteLine($"Formatted XLSX exported: {filenameBase}.xlsx");
 
+            //5. Make it an overview of the week
+            CsvTransposeUtil.Run(filenameBase + ".csv", "weekview-" + filenameBase + ".csv");
+            Console.WriteLine($"Week overview CSV exported: weekview-{filenameBase}.csv");
             return 0;
         }
         catch (Exception ex)
