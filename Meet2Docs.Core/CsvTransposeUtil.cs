@@ -1,6 +1,6 @@
 ﻿using System.Globalization;
 
-namespace Meet2Docs;
+namespace Meet2Docs.Core;
 
 internal class CsvTransposeUtil
 {

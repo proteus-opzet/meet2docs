@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Meet2Docs": {
+      "commandName": "Project",
+      "commandLineArgs": "--urls=https://www.when2meet.com/?31343937-Oy9cz,https://www.when2meet.com/?31343960-jiYnj"
+    }
+  }
+}

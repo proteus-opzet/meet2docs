@@ -1,6 +1,7 @@
 ﻿using System.CommandLine;
+using Meet2Docs.Core;
 
-namespace Meet2Docs;
+namespace Meet2Docs.Cli;
 
 public class Program
 {

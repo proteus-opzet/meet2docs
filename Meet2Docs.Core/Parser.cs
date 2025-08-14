@@ -1,8 +1,8 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace Meet2Docs;
+namespace Meet2Docs.Core;
 
-internal class Parser
+public class Parser
 {
 
     private const int NDaysAfterWhichTheNextMondayIsSelected = 4;
@@ -29,7 +29,7 @@ internal class Parser
     /// <summary>
     /// Main program logic
     /// </summary>
-    public static async Task<int> Run(string[] urls, string[] selectOnly)
+    public static async Task<int> Run(string[] urls, string[] selectOnly, string beginTimeString = null, string endTimeString = null)
     {
         try
         {

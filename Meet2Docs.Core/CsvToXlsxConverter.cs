@@ -2,7 +2,7 @@
 using System.Globalization;
 using ClosedXML.Excel;
 
-namespace Meet2Docs;
+namespace Meet2Docs.Core;
 
 public class CsvToXlsxConverter
 {
