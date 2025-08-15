@@ -4,35 +4,21 @@ namespace Meet2Docs.Core;
 
 public class Parser
 {
-
-    private const int NDaysAfterWhichTheNextMondayIsSelected = 4;
-    private static DateTimeOffset StartOfWeek
-    {
-        get
-        {
-            var start = DateTimeOffset.Now.AddDays(NDaysAfterWhichTheNextMondayIsSelected);
-            var daysUntilMonday = ((int)DayOfWeek.Monday - (int)start.DayOfWeek + 7) % 7;
-            if (daysUntilMonday == 0)
-                daysUntilMonday = 7; // ensures we get the *next* Monday, not today if it's already Monday
-            DateTimeOffset nextMonday = start.Date.AddDays(daysUntilMonday);
-            return nextMonday;
-        }
-    }
-
-    private static readonly DateTimeOffset EndOfWeek = StartOfWeek.AddDays(7);
-
-    private static readonly TimeSpan BeginningOfDay = new(6, 0, 0);
-    private static readonly TimeSpan EndOfDay = new(22, 0, 0);
+    private static TimeSpan? _fromHour;
+    private static TimeSpan? _toHour;
 
     public static readonly TimeZoneInfo Timezone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Amsterdam");
 
     /// <summary>
     /// Main program logic
     /// </summary>
-    public static async Task<int> Run(string[] urls, string[] selectOnly, string beginTimeString = null, string endTimeString = null)
+    public static async Task<int> Run(string[] urls, string[] selectOnly, DateTime? beginTime = null, DateTime? endTime = null, int fromHour = 6, int toHour = 22)
     {
         try
         {
+            _fromHour = new TimeSpan(fromHour, 0, 0);
+            _toHour = new TimeSpan(toHour, 0, 0);
+
             //1. Using data from the first URL, retrieve timeslot times
             var firstUrl = urls.FirstOrDefault();
             var inputHtmls = new string[urls.Length];
@@ -51,7 +37,7 @@ public class Parser
             }
 
             // 3. Summarize user availability
-            timeslots = MarkBlockMembership(timeslots);
+            timeslots = MarkBlockMembership(timeslots, beginTime ?? DateTime.MinValue, endTime ?? DateTime.MaxValue);
 
             // 4. Write output CSV, XLSX
             var eventNames = new string[urls.Length];
@@ -168,12 +154,12 @@ public class Parser
     /// <summary>
     /// Finds blocks of at least 90 minutes each where the same 3 people are available (or more).
     /// </summary>
-    private static List<Timeslot> MarkBlockMembership(List<Timeslot> timeslots)
+    private static List<Timeslot> MarkBlockMembership(List<Timeslot> timeslots, DateTime beginTime, DateTime endTime)
     {
         var filtered = timeslots.Where(slot =>
         {
             var dt = slot.DateTimeBegin;
-            return dt >= StartOfWeek && dt < EndOfWeek && dt.TimeOfDay >= BeginningOfDay && dt.TimeOfDay < EndOfDay;
+            return dt >= beginTime && dt < endTime && dt.TimeOfDay >= _fromHour && dt.TimeOfDay < _toHour;
         }).OrderBy(slot => slot.DateTimeBegin).ToList();
 
         if (filtered.Count < 1)

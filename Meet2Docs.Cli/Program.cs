@@ -1,16 +1,29 @@
 ﻿using System.CommandLine;
+using System.Globalization;
 using Meet2Docs.Core;
 
 namespace Meet2Docs.Cli;
 
 public class Program
 {
+    private const int NDaysAfterWhichTheNextMondayIsSelected = 4;
+
+    private static DateTimeOffset StartOfWeek
+    {
+        get
+        {
+            var start = DateTimeOffset.Now.AddDays(NDaysAfterWhichTheNextMondayIsSelected);
+            var daysUntilMonday = ((int)DayOfWeek.Monday - (int)start.DayOfWeek + 7) % 7;
+            if (daysUntilMonday == 0) daysUntilMonday = 7;
+            return start.Date.AddDays(daysUntilMonday);
+        }
+    }
+
     public static async Task<int> Main(string[] args)
     {
         var urlsOption = new Option<string[]>(
             name: "--urls",
-            "-u"
-        )
+            aliases: ["-u"])
         {
             Description = "A comma-separated list of URLs",
             Arity = ArgumentArity.ExactlyOne,
@@ -23,37 +36,96 @@ public class Program
         };
 
         var selectOnlyOption = new Option<string[]>(
-            "--select-only",
-            "-s"
-        )
+            name: "--select-only",
+            aliases: ["-s"])
         {
             Description = "A comma-separated list of names to select",
             Arity = ArgumentArity.ZeroOrOne,
             CustomParser = result =>
             {
-                var token = result.Tokens.Count > 0 ? result.Tokens[0].Value : "";
+                if (result.Tokens.Count == 0) return [];
+                var token = result.Tokens[0].Value;
                 return token.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            }
+            },
+            DefaultValueFactory = _ => []
         };
 
-        var rootCommand = new RootCommand("Extracts information about a When2Meet event");
-        rootCommand.Options.Add(urlsOption);
-        rootCommand.Options.Add(selectOnlyOption);
-        var parseResult = rootCommand.Parse(args);
-
-        rootCommand.SetAction(res =>
+        var beginTimeOption = new Option<DateTimeOffset>(
+            name: "--beginTime",
+            aliases: ["-b"]
+        )
         {
-            if (res.GetRequiredValue(urlsOption) is { } parsedUrls
-                && res.GetValue(selectOnlyOption) is { } parsedNamesToSelectOnly)
+            Description = "ISO 8601 time: filter dates after the specified value. Default: the next Monday at least 4 few days from now. This means: Fri(today),Sat,Sun,Mon,Tue,Wed,Thu,Fri,Sat,Sun,*Mon*. ",
+            DefaultValueFactory = _ => StartOfWeek
+        };
+
+        var endTimeOption = new Option<DateTimeOffset?>(
+            name: "--endTime",
+            aliases: ["-e"]
+        )
+        {
+            Description = "ISO 8601 time: filter dates before the specified value. Default: beginTime + 7 days."
+        };
+
+        var fromHour = new Option<int>(
+            name: "--beginHour",
+            aliases: ["-f"]
+        )
+        {
+            Description = "Filter timeslots after the specified hour of the day. Default: 6.",
+            DefaultValueFactory = _ => 6
+        };
+        fromHour.Validators.Add(r =>
+        {
+            var v = r.GetValueOrDefault<int>();
+            if (v is < 0 or > 23)
             {
-                return Parser.Run(parsedUrls, parsedNamesToSelectOnly).Result;
+                r.AddError("--beginHour must be between 0 and 23.");
             }
-            return 0;
         });
 
-        var statusCode = await parseResult.InvokeAsync();
+
+        var toHour = new Option<int>(
+            name: "--toHour",
+            aliases: ["-t"]
+        )
+        {
+            Description = "Filter timeslots before the specified hour of the day. Default: 22.",
+            DefaultValueFactory = _ => 22
+        };
+        fromHour.Validators.Add(r =>
+        {
+            var v = r.GetValueOrDefault<int>();
+            if (v < 0 || v > 23)
+            {
+                r.AddError("--toHour must be between 0 and 23.");
+            }
+        });
+
+        var root = new RootCommand("Extracts information about a When2Meet event")
+        {
+            urlsOption, selectOnlyOption, beginTimeOption, endTimeOption, fromHour, toHour
+        };
+
+        var parseResult = root.Parse(args);
+
+        root.SetAction(res =>
+        {
+            // values come out already parsed + defaults applied
+            var urls = res.GetRequiredValue(urlsOption);
+            var selectOnly = res.GetValue(selectOnlyOption);
+            var begin = res.GetValue(beginTimeOption);
+            var end = res.GetValue(endTimeOption) ?? begin.AddDays(7); // dependent default here
+            var beginHour = res.GetValue(fromHour);
+            var endHour = res.GetValue(toHour);
+
+
+            return Parser.Run(urls, selectOnly, begin, end, beginHour, endHour).Result;
+        });
+
+        var status = await parseResult.InvokeAsync();
         Console.WriteLine("Press any key to continue...");
         Console.ReadKey();
-        return statusCode;
+        return status;
     }
 }
