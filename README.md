@@ -4,6 +4,8 @@ Extract user availability from When2Meet data.
 
 ## Quick Start
 
+➡️ **[Download the latest release (v0.3.0-beta)](https://github.com/proteus-opzet/meet2docs/releases/tag/v0.3.0-beta)**
+
 You can run the GUI version by simply double-clicking `meet2Docs-gui-0.3.0-win-x64.exe` on Windows, `meet2Docs-gui-0.3.0-linux-x64` on Linux, or `meet2Docs-gui-0.3.0-osx-x64` on macOS.
 
 ### Alternatively, run via Command-line:
