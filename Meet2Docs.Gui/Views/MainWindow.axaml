@@ -1,46 +1,54 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Meet2Docs.Gui.ViewModels"
+        xmlns:local="using:Meet2Docs.Gui"
         x:Class="Meet2Docs.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Width="620" Height="420"
         Title="{Binding Title}">
-	<ScrollViewer Padding="14">
-		<StackPanel Spacing="10">
-			<TextBlock Text="URLs (comma-separated)" />
-			<TextBox Text="{Binding UrlsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Watermark="https://..., https://..." />
 
-			<TextBlock Text="Select Only (comma-separated names; optional)" />
-			<TextBox Text="{Binding SelectOnlyText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Watermark="Alice, Bob" />
+  <Window.Resources>
+    <local:InverseBooleanConverter x:Key="InverseBool" />
+  </Window.Resources>
 
-			<CheckBox Content="No date filter" IsChecked="{Binding NoDateFilter, Mode=TwoWay}" />
+  <ScrollViewer Padding="14">
+    <StackPanel Spacing="10">
+      <TextBlock Text="URLs (comma-separated)" />
+      <TextBox Text="{Binding UrlsText}" Watermark="https://..., https://..." />
 
-			<StackPanel Orientation="Horizontal" Spacing="12">
-				<StackPanel Width="280">
-					<TextBlock Text="Begin Date" />
-					<DatePicker SelectedDate="{Binding BeginDate, Mode=TwoWay}" />
-				</StackPanel>
-				<StackPanel Width="280">
-					<TextBlock Text="End Date (defaults to Begin + 7d)" />
-					<DatePicker SelectedDate="{Binding EndDate, Mode=TwoWay}" />
-				</StackPanel>
-			</StackPanel>
+      <TextBlock Text="Select Only (comma-separated names; optional)" />
+      <TextBox Text="{Binding SelectOnlyText}" Watermark="Alice, Bob" />
 
-			<StackPanel Orientation="Horizontal" Spacing="12">
-				<StackPanel Width="280">
-					<TextBlock Text="Begin Hour (0–23)" />
-					<TextBox Text="{Binding BeginHourText, Mode=TwoWay}" Watermark="6" />
-				</StackPanel>
-				<StackPanel Width="280">
-					<TextBlock Text="End Hour (0–23)" />
-					<TextBox Text="{Binding EndHourText, Mode=TwoWay}" Watermark="22" />
-				</StackPanel>
-			</StackPanel>
+      <CheckBox Content="No date filter" IsChecked="{Binding NoDateFilter}" />
 
-			<StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
-				<Button Content="Run" Command="{Binding RunCommand}" MinWidth="100" />
-				<TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="8,0,0,0" />
-			</StackPanel>
-		</StackPanel>
-	</ScrollViewer>
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <StackPanel Width="280">
+          <TextBlock Text="Begin Date" />
+          <DatePicker SelectedDate="{Binding BeginDate}"
+                      IsEnabled="{Binding NoDateFilter, Converter={StaticResource InverseBool}}" />
+        </StackPanel>
+        <StackPanel Width="280">
+          <TextBlock Text="End Date (defaults to Begin + 7d)" />
+          <DatePicker SelectedDate="{Binding EndDate}"
+                      IsEnabled="{Binding NoDateFilter, Converter={StaticResource InverseBool}}" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <StackPanel Width="280">
+          <TextBlock Text="Begin Hour (0–23)" />
+          <TextBox Text="{Binding BeginHourText}" Watermark="6" />
+        </StackPanel>
+        <StackPanel Width="280">
+          <TextBlock Text="End Hour (0–23)" />
+          <TextBox Text="{Binding EndHourText}" Watermark="22" />
+        </StackPanel>
+      </StackPanel>
+
+      <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
+        <Button Content="Run" Command="{Binding RunCommand}" MinWidth="100" />
+        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="8,0,0,0" />
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
 </Window>
