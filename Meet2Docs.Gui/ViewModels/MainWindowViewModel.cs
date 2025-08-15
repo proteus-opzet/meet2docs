@@ -102,7 +102,8 @@ public class MainWindowViewModel : ViewModelBase
     private static DateTimeOffset StartOfNextMeaningfulMonday()
     {
         const int N = 4;
-        var start = DateTimeOffset.Now.AddDays(N);
+        const int DaysAheadForMondaySelection = 4;
+        var start = DateTimeOffset.Now.AddDays(DaysAheadForMondaySelection);
         var daysUntilMonday = ((int)DayOfWeek.Monday - (int)start.DayOfWeek + 7) % 7;
         if (daysUntilMonday == 0) daysUntilMonday = 7;
         return start.Date.AddDays(daysUntilMonday);
