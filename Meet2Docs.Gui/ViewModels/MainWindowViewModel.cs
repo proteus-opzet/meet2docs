@@ -1,7 +1,8 @@
-﻿using System;
+﻿using Meet2Docs.Core;
+using System;
+using System.IO;
 using System.Linq;
 using System.Windows.Input;
-using Meet2Docs.Core;
 
 namespace Meet2Docs.Gui.ViewModels;
 
@@ -35,12 +36,19 @@ public class MainWindowViewModel : ViewModelBase
 
     public ICommand RunCommand { get; }
 
+    private string _output = "";
+    public string Output { get => _output; set => SetField(ref _output, value); }
+
     public MainWindowViewModel()
     {
         BeginDate = StartOfNextMeaningfulMonday();
         EndDate = BeginDate?.AddDays(7);
         RunCommand = new RelayCommand(async _ =>
         {
+            StringWriter? sw = null;
+            TextWriter? originalOut = null;
+            TextWriter? originalErr = null;
+
             try
             {
                 var urls = (UrlsText ?? "")
@@ -62,13 +70,31 @@ public class MainWindowViewModel : ViewModelBase
                 if (!NoDateFilter && begin.HasValue && end.HasValue && end <= begin)
                 { Status = "End date must be after begin date."; return; }
 
+                // Redirect console output while the parser runs
+                sw = new StringWriter();
+                originalOut = Console.Out;
+                originalErr = Console.Error;
+                Console.SetOut(sw);
+                Console.SetError(sw);
+
                 Status = "Running…";
                 var exitCode = await Parser.Run(urls, selectOnly, begin, end, beginHour, endHour);
+
+                // Grab all captured output
+                Output = sw.ToString();
                 Status = exitCode == 0 ? "Done." : $"Finished with exit code {exitCode}.";
             }
             catch (Exception ex)
             {
+                if (sw != null) sw.WriteLine(ex.ToString());
+                Output = sw?.ToString() ?? "";
                 Status = $"Error: {ex.Message}";
+            }
+            finally
+            {
+                if (originalOut != null) Console.SetOut(originalOut);
+                if (originalErr != null) Console.SetError(originalErr);
+                sw?.Dispose();
             }
         });
     }

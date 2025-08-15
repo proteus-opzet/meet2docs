@@ -4,7 +4,7 @@
         xmlns:local="using:Meet2Docs.Gui"
         x:Class="Meet2Docs.Gui.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Width="620" Height="420"
+        Width="620" Height="550"
         Title="{Binding Title}">
 
   <Window.Resources>
@@ -44,7 +44,16 @@
           <TextBox Text="{Binding EndHourText}" Watermark="22" />
         </StackPanel>
       </StackPanel>
-
+      <StackPanel>
+          <TextBlock Text="Output" Margin="0,6,0,0" />
+          <TextBox Text="{Binding Output}"
+                   AcceptsReturn="True"
+                   IsReadOnly="True"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                   FontFamily="Consolas, Menlo, Monaco, 'Courier New', monospace"
+                   Height="160" />
+      </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
         <Button Content="Run" Command="{Binding RunCommand}" MinWidth="100" />
         <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="8,0,0,0" />
