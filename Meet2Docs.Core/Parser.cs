@@ -12,7 +12,7 @@ public class Parser
     /// <summary>
     /// Main program logic
     /// </summary>
-    public static async Task<int> Run(string[] urls, string[] selectOnly, DateTime? beginTime = null, DateTime? endTime = null, int fromHour = 6, int toHour = 22)
+    public static async Task<int> Run(string[] urls, string[] selectOnly, DateTimeOffset? beginTime = null, DateTimeOffset? endTime = null, int fromHour = 6, int toHour = 22)
     {
         try
         {
@@ -37,7 +37,7 @@ public class Parser
             }
 
             // 3. Summarize user availability
-            timeslots = MarkBlockMembership(timeslots, beginTime ?? DateTime.MinValue, endTime ?? DateTime.MaxValue);
+            timeslots = MarkBlockMembership(timeslots, beginTime ?? DateTimeOffset.MinValue, endTime ?? DateTimeOffset.MaxValue);
 
             // 4. Write output CSV, XLSX
             var eventNames = new string[urls.Length];
@@ -154,7 +154,7 @@ public class Parser
     /// <summary>
     /// Finds blocks of at least 90 minutes each where the same 3 people are available (or more).
     /// </summary>
-    private static List<Timeslot> MarkBlockMembership(List<Timeslot> timeslots, DateTime beginTime, DateTime endTime)
+    private static List<Timeslot> MarkBlockMembership(List<Timeslot> timeslots, DateTimeOffset beginTime, DateTimeOffset endTime)
     {
         var filtered = timeslots.Where(slot =>
         {

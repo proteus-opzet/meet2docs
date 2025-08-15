@@ -50,12 +50,13 @@ public class Program
             DefaultValueFactory = _ => []
         };
 
-        var beginTimeOption = new Option<DateTimeOffset>(
+        // Make this nullable so we can pass null to Parser.Run when date filtering is disabled.
+        var beginTimeOption = new Option<DateTimeOffset?>(
             name: "--beginTime",
             aliases: ["-b"]
         )
         {
-            Description = "ISO 8601 time: filter dates after the specified value. Default: the next Monday at least 4 few days from now. This means: Fri(today),Sat,Sun,Mon,Tue,Wed,Thu,Fri,Sat,Sun,*Mon*. ",
+            Description = "ISO 8601 time: filter dates after the specified value. Default: the next Monday at least 4 few days from now. This means: Fri(today),Sat,Sun,Mon,Tue,Wed,Thu,Fri,Sat,Sun,*Mon*.",
             DefaultValueFactory = _ => StartOfWeek
         };
 
@@ -65,6 +66,14 @@ public class Program
         )
         {
             Description = "ISO 8601 time: filter dates before the specified value. Default: beginTime + 7 days."
+        };
+
+        var noDateFilterOption = new Option<bool>(
+            name: "--no-date-filter",
+            aliases: ["-N"]
+        )
+        {
+            Description = "Disable filtering by date: select all timeslots. BeginHour and ToHour arguments or their defaults are still being used."
         };
 
         var fromHour = new Option<int>(
@@ -84,7 +93,6 @@ public class Program
             }
         });
 
-
         var toHour = new Option<int>(
             name: "--toHour",
             aliases: ["-t"]
@@ -93,7 +101,8 @@ public class Program
             Description = "Filter timeslots before the specified hour of the day. Default: 22.",
             DefaultValueFactory = _ => 22
         };
-        fromHour.Validators.Add(r =>
+        // Fix: apply validator to toHour (was mistakenly added to fromHour before)
+        toHour.Validators.Add(r =>
         {
             var v = r.GetValueOrDefault<int>();
             if (v < 0 || v > 23)
@@ -104,7 +113,7 @@ public class Program
 
         var root = new RootCommand("Extracts information about a When2Meet event")
         {
-            urlsOption, selectOnlyOption, beginTimeOption, endTimeOption, fromHour, toHour
+            urlsOption, selectOnlyOption, beginTimeOption, endTimeOption, noDateFilterOption, fromHour, toHour
         };
 
         var parseResult = root.Parse(args);
@@ -114,11 +123,20 @@ public class Program
             // values come out already parsed + defaults applied
             var urls = res.GetRequiredValue(urlsOption);
             var selectOnly = res.GetValue(selectOnlyOption);
-            var begin = res.GetValue(beginTimeOption);
-            var end = res.GetValue(endTimeOption) ?? begin.AddDays(7); // dependent default here
+
+            // pull values as nullable so we can pass null through
+            DateTimeOffset? begin = res.GetValue(beginTimeOption);
+            DateTimeOffset? end = res.GetValue(endTimeOption) ?? begin?.AddDays(7); // dependent default here
+
+            var disableDateFilter = res.GetValue(noDateFilterOption);
+            if (disableDateFilter)
+            {
+                begin = null;
+                end = null;
+            }
+
             var beginHour = res.GetValue(fromHour);
             var endHour = res.GetValue(toHour);
-
 
             return Parser.Run(urls, selectOnly, begin, end, beginHour, endHour).Result;
         });
