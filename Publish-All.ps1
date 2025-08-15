@@ -25,25 +25,39 @@ dotnet publish -c Release -p:PublishProfile=".\Meet2Docs.Gui\Properties\PublishP
 dotnet publish -c Release -p:PublishProfile=".\Meet2Docs.Gui\Properties\PublishProfiles\FolderProfile-osx-x64.pubxml"     .\Meet2Docs.Gui\Meet2Docs.Gui.csproj
 
 
-# Publish root for CLI (net9.0)
+# --- Paths ---
+$SolutionPublishFolder = Join-Path $PSScriptRoot "publish"
+if (-not (Test-Path $SolutionPublishFolder)) { New-Item -ItemType Directory -Path $SolutionPublishFolder | Out-Null }
+
+# CLI publish root
 $CliPublishRoot = Join-Path $PSScriptRoot "Meet2Docs.Cli\bin\Release\net9.0\publish"
+$CliSrcLinux = Join-Path $CliPublishRoot "linux-x64\Meet2Docs.Cli"
+$CliSrcOsx   = Join-Path $CliPublishRoot "osx-x64\Meet2Docs.Cli"
+$CliSrcWin   = Join-Path $CliPublishRoot "win-x64\Meet2Docs.Cli.exe"
 
-# Source files (single-file outputs created by the pubxml profiles)
-$SrcLinux = Join-Path $CliPublishRoot "linux-x64\Meet2Docs.Cli"
-$SrcOsx   = Join-Path $CliPublishRoot "osx-x64\Meet2Docs.Cli"
-$SrcWin   = Join-Path $CliPublishRoot "win-x64\Meet2Docs.Cli.exe"
+# GUI publish root
+$GuiPublishRoot = Join-Path $PSScriptRoot "Meet2Docs.Gui\bin\Release\net9.0\publish"
+$GuiSrcLinux = Join-Path $GuiPublishRoot "linux-x64\Meet2Docs.Gui"
+$GuiSrcOsx   = Join-Path $GuiPublishRoot "osx-x64\Meet2Docs.Gui"
+$GuiSrcWin   = Join-Path $GuiPublishRoot "win-x64\Meet2Docs.Gui.exe"
 
-# Target file names you want for the release
-$DstLinux = Join-Path $CliPublishRoot ("meet2Docs-{0}-linux-x64" -f $Version)
-$DstOsx   = Join-Path $CliPublishRoot ("meet2Docs-{0}-osx-x64"   -f $Version)
-$DstWin   = Join-Path $CliPublishRoot ("meet2Docs-{0}-win-x64.exe" -f $Version)
+# --- Rename/copy CLI outputs ---
+$CliDstLinux = Join-Path $SolutionPublishFolder ("meet2Docs-cli-{0}-linux-x64" -f $Version)
+$CliDstOsx   = Join-Path $SolutionPublishFolder ("meet2Docs-cli-{0}-osx-x64"   -f $Version)
+$CliDstWin   = Join-Path $SolutionPublishFolder ("meet2Docs-cli-{0}-win-x64.exe" -f $Version)
 
-# Copy/overwrite if present
-if (Test-Path $SrcLinux) { Copy-Item $SrcLinux $DstLinux -Force }
-if (Test-Path $SrcOsx)   { Copy-Item $SrcOsx   $DstOsx   -Force }
-if (Test-Path $SrcWin)   { Copy-Item $SrcWin   $DstWin   -Force }
+if (Test-Path $CliSrcLinux) { Copy-Item $CliSrcLinux $CliDstLinux -Force }
+if (Test-Path $CliSrcOsx)   { Copy-Item $CliSrcOsx   $CliDstOsx   -Force }
+if (Test-Path $CliSrcWin)   { Copy-Item $CliSrcWin   $CliDstWin   -Force }
 
-Write-Host "Created:"
-Write-Host "  $DstLinux"
-Write-Host "  $DstOsx"
-Write-Host "  $DstWin"
+# --- Rename/copy GUI outputs ---
+$GuiDstLinux = Join-Path $SolutionPublishFolder ("meet2Docs-gui-{0}-linux-x64" -f $Version)
+$GuiDstOsx   = Join-Path $SolutionPublishFolder ("meet2Docs-gui-{0}-osx-x64"   -f $Version)
+$GuiDstWin   = Join-Path $SolutionPublishFolder ("meet2Docs-gui-{0}-win-x64.exe" -f $Version)
+
+if (Test-Path $GuiSrcLinux) { Copy-Item $GuiSrcLinux $GuiDstLinux -Force }
+if (Test-Path $GuiSrcOsx)   { Copy-Item $GuiSrcOsx   $GuiDstOsx   -Force }
+if (Test-Path $GuiSrcWin)   { Copy-Item $GuiSrcWin   $GuiDstWin   -Force }
+
+Write-Host "`nCreated in $SolutionPublishFolder"
+Get-ChildItem $SolutionPublishFolder
