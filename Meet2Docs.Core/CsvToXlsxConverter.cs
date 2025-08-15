@@ -2,7 +2,7 @@
 using System.Globalization;
 using ClosedXML.Excel;
 
-namespace Meet2Docs;
+namespace Meet2Docs.Core;
 
 public class CsvToXlsxConverter
 {
@@ -67,7 +67,7 @@ public class CsvToXlsxConverter
             }
             else if (allDateTime)
             {
-                bool allTimeOnly = true;
+                var allTimeOnly = true;
 
                 foreach (var cell in dataRange.Cells())
                 {

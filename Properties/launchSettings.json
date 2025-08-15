@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "Meet2Docs": {
-      "commandName": "Project",
-      "commandLineArgs": "--urls=https://www.when2meet.com/ChangeMe1,https://www.when2meet.com/ChangeMe2 --select-only=\"Name Surname 1\",\"Name Surname 2\""
-    }
-  }
-}

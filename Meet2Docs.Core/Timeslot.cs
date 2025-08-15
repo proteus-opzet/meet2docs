@@ -1,4 +1,4 @@
-﻿namespace Meet2Docs;
+﻿namespace Meet2Docs.Core;
 
 internal class Timeslot
 {
