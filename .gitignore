@@ -3,3 +3,5 @@
 **/obj
 /.idea
 *.iml
+**.csproj.user
+**.pubxml.user
