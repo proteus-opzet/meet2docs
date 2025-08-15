@@ -4,6 +4,8 @@ namespace Meet2Docs.Core;
 
 internal class CsvTransposeUtil
 {
+    const int SlotIntervalMinutes = 15;
+
     internal static void Run(string inputPath, string outputPath)
     {
         // Read all lines from CSV
@@ -124,7 +126,7 @@ internal class CsvTransposeUtil
             var rowUsers = GetAvailableUsers(row, userCols);
 
             // Check: 15-minute gap and same user set
-            if (Math.Abs((row.BeginTime - prevTime).TotalMinutes - 15) < double.Epsilon && currentUsers.SetEquals(rowUsers))
+            if (Math.Abs((row.BeginTime - prevTime).TotalMinutes - SlotIntervalMinutes) < double.Epsilon && currentUsers.SetEquals(rowUsers))
             {
                 prevTime = row.BeginTime;
             }
