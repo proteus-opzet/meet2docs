@@ -56,7 +56,7 @@ public class Program
             aliases: ["-b"]
         )
         {
-            Description = "ISO 8601 time: filter dates after the specified value. Default: the next Monday at least 4 few days from now. This means: Fri(today),Sat,Sun,Mon,Tue,Wed,Thu,Fri,Sat,Sun,*Mon*.",
+            Description = "ISO 8601 time: filter dates after the specified value. Default: the next Monday, at least 4 days out. Leave empty for the regular planning sessions :)",
             DefaultValueFactory = _ => StartOfWeek
         };
 
