@@ -11,13 +11,13 @@ public class MainWindowViewModel : ViewModelBase
     public string Title => "Meet2Docs — GUI";
 
     private string _urlsText = "";
-    public string UrlsText { get => _urlsText; set => SetField(ref _urlsText, value); }
+    public string UrlsText { get => _urlsText; set { if (SetField(ref _urlsText, value)) SaveSettings(); } }
 
     private string _selectOnlyText = "";
-    public string SelectOnlyText { get => _selectOnlyText; set => SetField(ref _selectOnlyText, value); }
+    public string SelectOnlyText { get => _selectOnlyText; set { if (SetField(ref _selectOnlyText, value)) SaveSettings(); } }
 
     private bool _noDateFilter;
-    public bool NoDateFilter { get => _noDateFilter; set => SetField(ref _noDateFilter, value); }
+    public bool NoDateFilter { get => _noDateFilter; set { if (SetField(ref _noDateFilter, value)) SaveSettings(); } }
 
     private DateTimeOffset? _beginDate;
     public DateTimeOffset? BeginDate { get => _beginDate; set { SetField(ref _beginDate, value); if (EndDate is null && value is { } v) EndDate = v.AddDays(7); } }
@@ -26,10 +26,10 @@ public class MainWindowViewModel : ViewModelBase
     public DateTimeOffset? EndDate { get => _endDate; set => SetField(ref _endDate, value); }
 
     private string _beginHourText = "6";
-    public string BeginHourText { get => _beginHourText; set => SetField(ref _beginHourText, value); }
+    public string BeginHourText { get => _beginHourText; set { if (SetField(ref _beginHourText, value)) SaveSettings(); } }
 
     private string _endHourText = "22";
-    public string EndHourText { get => _endHourText; set => SetField(ref _endHourText, value); }
+    public string EndHourText { get => _endHourText; set { if (SetField(ref _endHourText, value)) SaveSettings(); } }
 
     private string _status = "Ready.";
     public string Status { get => _status; set => SetField(ref _status, value); }
@@ -41,6 +41,13 @@ public class MainWindowViewModel : ViewModelBase
 
     public MainWindowViewModel()
     {
+        var settings = UserSettings.Load();
+        _urlsText = settings.UrlsText;
+        _selectOnlyText = settings.SelectOnlyText;
+        _noDateFilter = settings.NoDateFilter;
+        _beginHourText = settings.BeginHourText;
+        _endHourText = settings.EndHourText;
+
         BeginDate = StartOfNextMeaningfulMonday();
         EndDate = BeginDate?.AddDays(7);
         RunCommand = new RelayCommand(async _ =>
@@ -98,6 +105,15 @@ public class MainWindowViewModel : ViewModelBase
             }
         });
     }
+
+    private void SaveSettings() => new UserSettings
+    {
+        UrlsText = UrlsText,
+        SelectOnlyText = SelectOnlyText,
+        NoDateFilter = NoDateFilter,
+        BeginHourText = BeginHourText,
+        EndHourText = EndHourText,
+    }.Save();
 
     private static DateTimeOffset StartOfNextMeaningfulMonday()
     {
