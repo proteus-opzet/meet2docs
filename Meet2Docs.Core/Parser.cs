@@ -19,44 +19,57 @@ public class Parser
             _fromHour = new TimeSpan(fromHour, 0, 0);
             _toHour = new TimeSpan(toHour, 0, 0);
 
-            //1. Using data from the first URL, retrieve timeslot times
-            var firstUrl = urls.FirstOrDefault();
-            var inputHtmls = new string[urls.Length];
+            // Split selectOnly into partitions divided by SEPARATOR
+            var partitions = SplitBySeparator(selectOnly);
 
+            //1. Fetch HTML from all URLs (once)
+            var inputHtmls = new string[urls.Length];
             var requestTimestamp = DateTime.Now;
             using var client = new HttpClient();
-            inputHtmls[0] = await client.GetStringAsync(firstUrl);
-            var timeslots = RetrieveTimeslots(inputHtmls[0]);
-
-            //2. Add availability from all URLs
             for (var i = 0; i < urls.Length; i++)
             {
-                var url = urls[i];
-                inputHtmls[i] = await client.GetStringAsync(url);
-                timeslots = AddAvailabilityToTimeslots(inputHtmls[i], timeslots, selectOnly);
+                inputHtmls[i] = await client.GetStringAsync(urls[i]);
             }
 
-            // 3. Summarize user availability
-            timeslots = MarkBlockMembership(timeslots, beginTime ?? DateTimeOffset.MinValue, endTime ?? DateTimeOffset.MaxValue);
-
-            // 4. Write output CSV, XLSX
+            // Compute event names and base filename (once)
             var eventNames = new string[urls.Length];
             for (var i = 0; i < urls.Length; i++)
             {
                 eventNames[i] = string.Join("_", FindEventName(inputHtmls[i]).Split(Path.GetInvalidFileNameChars())).Replace(" ", "_");
             }
-
             var filenameBase = $"{string.Join("_", eventNames)}_{requestTimestamp:yyyyMMdd_HHmmss}";
-            var lines = CreateCsv(timeslots);
 
-            await File.WriteAllLinesAsync(filenameBase + ".csv", lines);
-            Console.WriteLine($"Basic CSV exported: {filenameBase}.csv");
-            CsvToXlsxConverter.Run(filenameBase + ".csv", filenameBase + ".xlsx");
-            Console.WriteLine($"Formatted XLSX exported: {filenameBase}.xlsx");
+            // Run processing for each partition
+            for (var p = 0; p < partitions.Count; p++)
+            {
+                var partSelectOnly = partitions[p];
+                var partFilenameBase = partitions.Count > 1 ? $"{filenameBase}_part{p + 1}" : filenameBase;
 
-            //5. Make it an overview of the week
-            CsvTransposeUtil.Run(filenameBase + ".csv", "weekview-" + filenameBase + ".csv");
-            Console.WriteLine($"Week overview CSV exported: weekview-{filenameBase}.csv");
+                if (partitions.Count > 1)
+                    Console.WriteLine($"\n--- Partition {p + 1}: {(partSelectOnly.Length > 0 ? string.Join(", ", partSelectOnly) : "(all)")} ---");
+
+                //2. Retrieve timeslots and add availability
+                var timeslots = RetrieveTimeslots(inputHtmls[0]);
+                for (var i = 0; i < urls.Length; i++)
+                {
+                    timeslots = AddAvailabilityToTimeslots(inputHtmls[i], timeslots, partSelectOnly);
+                }
+
+                // 3. Summarize user availability
+                timeslots = MarkBlockMembership(timeslots, beginTime ?? DateTimeOffset.MinValue, endTime ?? DateTimeOffset.MaxValue);
+
+                // 4. Write output CSV, XLSX
+                var lines = CreateCsv(timeslots);
+                await File.WriteAllLinesAsync(partFilenameBase + ".csv", lines);
+                Console.WriteLine($"Basic CSV exported: {partFilenameBase}.csv");
+                CsvToXlsxConverter.Run(partFilenameBase + ".csv", partFilenameBase + ".xlsx");
+                Console.WriteLine($"Formatted XLSX exported: {partFilenameBase}.xlsx");
+
+                //5. Make it an overview of the week
+                CsvTransposeUtil.Run(partFilenameBase + ".csv", "weekview-" + partFilenameBase + ".csv");
+                Console.WriteLine($"Week overview CSV exported: weekview-{partFilenameBase}.csv");
+            }
+
             return 0;
         }
         catch (Exception ex)
@@ -64,6 +77,38 @@ public class Parser
             await Console.Error.WriteLineAsync(ex.Message);
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Splits a list of names into partitions separated by the special "SEPARATOR" entry.
+    /// </summary>
+    private static List<string[]> SplitBySeparator(string[] items)
+    {
+        var partitions = new List<string[]>();
+        var current = new List<string>();
+
+        foreach (var item in items)
+        {
+            if (string.Equals(item, "SEPARATOR", StringComparison.OrdinalIgnoreCase))
+            {
+                if (current.Count > 0)
+                    partitions.Add(current.ToArray());
+                current = [];
+            }
+            else
+            {
+                current.Add(item);
+            }
+        }
+
+        if (current.Count > 0)
+            partitions.Add(current.ToArray());
+
+        // No partitions found (empty selectOnly or only SEPARATORs) → single run with no filter
+        if (partitions.Count == 0)
+            partitions.Add([]);
+
+        return partitions;
     }
 
     /// <summary>
