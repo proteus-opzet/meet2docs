@@ -55,6 +55,7 @@
                    Height="160" />
       </StackPanel>
       <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
+        <Button Content="Fetch Names" Command="{Binding FetchNamesCommand}" MinWidth="100" />
         <Button Content="Run" Command="{Binding RunCommand}" MinWidth="100" />
         <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="8,0,0,0" />
       </StackPanel>

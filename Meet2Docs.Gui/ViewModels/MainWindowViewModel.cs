@@ -1,7 +1,10 @@
 ﻿using Meet2Docs.Core;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
 
 namespace Meet2Docs.Gui.ViewModels;
@@ -35,6 +38,7 @@ public class MainWindowViewModel : ViewModelBase
     public string Status { get => _status; set => SetField(ref _status, value); }
 
     public ICommand RunCommand { get; }
+    public ICommand FetchNamesCommand { get; }
 
     private string _output = "";
     public string Output { get => _output; set => SetField(ref _output, value); }
@@ -102,6 +106,36 @@ public class MainWindowViewModel : ViewModelBase
                 if (originalOut != null) Console.SetOut(originalOut);
                 if (originalErr != null) Console.SetError(originalErr);
                 sw?.Dispose();
+            }
+        });
+
+        FetchNamesCommand = new RelayCommand(async _ =>
+        {
+            try
+            {
+                var urls = (UrlsText ?? "")
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (urls.Length == 0) { Status = "Please enter at least one URL."; return; }
+
+                Status = "Fetching names…";
+                using var client = new HttpClient();
+                var names = new HashSet<string>();
+
+                foreach (var url in urls)
+                {
+                    var html = await client.GetStringAsync(url);
+                    foreach (Match match in Regex.Matches(html, @"PeopleNames\[(\d+)] = '([^']+)';PeopleIDs\[\1] = (\d+);"))
+                    {
+                        names.Add(match.Groups[2].Value.Trim());
+                    }
+                }
+
+                Output = string.Join(", ", names.OrderBy(n => n));
+                Status = $"Found {names.Count} participant(s).";
+            }
+            catch (Exception ex)
+            {
+                Status = $"Error: {ex.Message}";
             }
         });
     }
