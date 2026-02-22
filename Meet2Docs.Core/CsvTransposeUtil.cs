@@ -116,35 +116,115 @@ internal class CsvTransposeUtil
         var ranges = new List<(DateTime Start, DateTime End, HashSet<string> AvailableUsers)>();
         if (sortedRows.Count == 0) return ranges;
 
-        var rangeStart = sortedRows[0].BeginTime;
-        var prevTime = rangeStart;
-        var currentUsers = GetAvailableUsers(sortedRows[0], userCols);
+        // Precompute user sets for each slot
+        var slotUsers = sortedRows.Select(r => GetAvailableUsers(r, userCols)).ToList();
 
-        for (var i = 1; i < sortedRows.Count; i++)
+        // Find peaks and expand from each one
+        var peaks = FindPeaks(slotUsers, minPeaks: 3);
+        foreach (var peakIdx in peaks)
         {
-            var row = sortedRows[i];
-            var rowUsers = GetAvailableUsers(row, userCols);
+            var (lo, hi, users) = ExpandFromPeak(peakIdx, sortedRows, slotUsers);
+            ranges.Add((sortedRows[lo].BeginTime, sortedRows[hi].BeginTime, users));
+        }
 
-            // Check: 15-minute gap and same user set
-            if (Math.Abs((row.BeginTime - prevTime).TotalMinutes - SlotIntervalMinutes) < double.Epsilon && currentUsers.SetEquals(rowUsers))
-            {
-                prevTime = row.BeginTime;
-            }
-            else
-            {
-                // Close current range
-                ranges.Add((rangeStart, prevTime, currentUsers));
+        // Deduplicate identical ranges, sort by start time
+        var seen = new HashSet<string>();
+        var deduplicated = new List<(DateTime Start, DateTime End, HashSet<string> AvailableUsers)>();
+        foreach (var range in ranges.OrderBy(r => r.Start).ThenByDescending(r => r.AvailableUsers.Count))
+        {
+            var key = $"{range.Start:o}|{range.End:o}|{string.Join(",", range.AvailableUsers.OrderBy(u => u))}";
+            if (seen.Add(key))
+                deduplicated.Add(range);
+        }
 
-                // Start new range
-                rangeStart = row.BeginTime;
-                prevTime = row.BeginTime;
-                currentUsers = rowUsers;
+        return deduplicated;
+    }
+
+    /// <summary>
+    /// Finds local maxima (slots where user count >= both neighbors).
+    /// Supplements with highest-count slots if fewer than minPeaks are found.
+    /// </summary>
+    private static List<int> FindPeaks(List<HashSet<string>> slotUsers, int minPeaks)
+    {
+        var peaks = new List<int>();
+        for (var i = 0; i < slotUsers.Count; i++)
+        {
+            var count = slotUsers[i].Count;
+            var prevCount = i > 0 ? slotUsers[i - 1].Count : -1;
+            var nextCount = i < slotUsers.Count - 1 ? slotUsers[i + 1].Count : -1;
+            if (count >= prevCount && count >= nextCount)
+                peaks.Add(i);
+        }
+
+        // Ensure at least minPeaks starting points
+        if (peaks.Count < minPeaks)
+        {
+            var peakSet = new HashSet<int>(peaks);
+            var extras = Enumerable.Range(0, slotUsers.Count)
+                .Where(i => !peakSet.Contains(i))
+                .OrderByDescending(i => slotUsers[i].Count);
+            foreach (var idx in extras)
+            {
+                peaks.Add(idx);
+                if (peaks.Count >= minPeaks) break;
             }
         }
 
-        // Add final range
-        ranges.Add((rangeStart, prevTime, currentUsers));
-        return ranges;
+        return peaks;
+    }
+
+    /// <summary>
+    /// From a peak slot, greedily expands bidirectionally.
+    /// At each step, tries both neighbors and picks the direction that preserves more users.
+    /// </summary>
+    private static (int Lo, int Hi, HashSet<string> Users) ExpandFromPeak(
+        int peakIdx, List<AvailabilityRow> sortedRows, List<HashSet<string>> slotUsers)
+    {
+        var currentUsers = new HashSet<string>(slotUsers[peakIdx]);
+        int lo = peakIdx, hi = peakIdx;
+
+        while (true)
+        {
+            HashSet<string> backIntersection = null;
+            HashSet<string> fwdIntersection = null;
+
+            // Try backward
+            if (lo > 0 && IsConsecutive(sortedRows[lo - 1], sortedRows[lo]))
+            {
+                backIntersection = new HashSet<string>(currentUsers);
+                backIntersection.IntersectWith(slotUsers[lo - 1]);
+                if (backIntersection.Count == 0) backIntersection = null;
+            }
+
+            // Try forward
+            if (hi < sortedRows.Count - 1 && IsConsecutive(sortedRows[hi], sortedRows[hi + 1]))
+            {
+                fwdIntersection = new HashSet<string>(currentUsers);
+                fwdIntersection.IntersectWith(slotUsers[hi + 1]);
+                if (fwdIntersection.Count == 0) fwdIntersection = null;
+            }
+
+            if (backIntersection == null && fwdIntersection == null) break;
+
+            // Pick the direction that preserves the most users
+            if (backIntersection != null && (fwdIntersection == null || backIntersection.Count >= fwdIntersection.Count))
+            {
+                lo--;
+                currentUsers = backIntersection;
+            }
+            else
+            {
+                hi++;
+                currentUsers = fwdIntersection!;
+            }
+        }
+
+        return (lo, hi, currentUsers);
+    }
+
+    private static bool IsConsecutive(AvailabilityRow earlier, AvailabilityRow later)
+    {
+        return Math.Abs((later.BeginTime - earlier.BeginTime).TotalMinutes - SlotIntervalMinutes) < double.Epsilon;
     }
 
     private static HashSet<string> GetAvailableUsers(AvailabilityRow row, List<string> userCols)
